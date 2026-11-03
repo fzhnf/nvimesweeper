@@ -1,4 +1,4 @@
-local fn, ui, uv = vim.fn, vim.ui, vim.loop
+local fn, ui = vim.fn, vim.ui
 
 local config_mod = require "nvimesweeper.config"
 local game = require "nvimesweeper.game"
@@ -28,29 +28,27 @@ function M.play(opts)
   local config = config_mod.config
   opts = vim.tbl_extend("force", config.opts, opts or {})
 
-  -- modifying opts while iterating it with pairs() is "A Bad Idea(TM)", so
-  -- modify new_opts instead and replace opts with it later
+  -- presets act like boolean options; expand them before the other options so
+  -- explicit arguments win over preset values
   local new_opts = {}
   for opt, value in pairs(opts) do
-    local correct_type = opt_types[opt]
-    local preset
-    if not correct_type then
-      preset = config.presets[opt]
-      if preset then
-        correct_type = "boolean" -- presets act like bool options
-      else
+    local preset = config.presets[opt]
+    if preset and util.convert_to(value, "boolean") then
+      new_opts = vim.tbl_extend("force", new_opts, preset)
+    end
+  end
+
+  for opt, value in pairs(opts) do
+    if not config.presets[opt] then
+      local opt_type = opt_types[opt]
+      if not opt_type then
         error('unknown option "' .. opt .. '"')
       end
-    end
 
-    value = util.convert_to(value, correct_type)
-    if value == nil then
-      error(opt .. " should be a " .. correct_type .. "!")
-    end
-
-    if preset and value then
-      new_opts = vim.tbl_extend("force", new_opts, preset)
-    else
+      value = util.convert_to(value, opt_type)
+      if value == nil then
+        error(opt .. " should be a " .. opt_type .. "!")
+      end
       new_opts[opt] = value
     end
   end
@@ -59,8 +57,7 @@ function M.play(opts)
   local function input_required_opts()
     if not opts.seed then
       -- choose a seed based on the current time (in seconds) if omitted
-      local seconds, _ = uv.gettimeofday()
-      opts.seed = seconds
+      opts.seed = os.time()
     elseif not util.is_integer(opts.seed) then
       error "the seed must be an integer!"
     end

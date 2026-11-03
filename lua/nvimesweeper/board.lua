@@ -1,4 +1,7 @@
-local api, fn = vim.api, vim.fn
+local native = require "nvimesweeper.native"
+
+local util = require "nvimesweeper.util"
+local error = util.error
 
 local M = {
   SQUARE_NONE = 0,
@@ -13,6 +16,21 @@ end
 
 local Board = {}
 
+-- counters are owned by the engine; read them on demand so they cannot drift
+local counters = {
+  mine_count = native.mine_count,
+  flag_count = native.flag_count,
+  unrevealed_count = native.unrevealed_count,
+}
+
+local function board_index(self, key)
+  local counter = counters[key]
+  if counter then
+    return counter(self.handle)
+  end
+  return Board[key]
+end
+
 function Board:is_valid(x, y)
   return x >= 0 and y >= 0 and x < self.width and y < self.height
 end
@@ -21,137 +39,64 @@ function Board:index(x, y)
   return self:is_valid(x, y) and self.width * y + x + 1 or nil
 end
 
--- Uses self.mine_count if mine_count argument is nil
-function Board:place_mines(safe_x, safe_y, seed, mine_count)
-  mine_count = mine_count or self.mine_count
-  self.mines = {}
-  self.mine_count = 0
-
-  local function is_adjacent(x, y, x2, y2)
-    return math.abs(x - x2) <= 1 and math.abs(y - y2) <= 1
-  end
-
-  api.nvim_set_var("_nvimesweeper_seed", fn.srand(seed))
-  local function rand(max_excl)
-    return api.nvim_eval "rand(g:_nvimesweeper_seed)" % max_excl
-  end
-
-  for _ = 1, mine_count do
-    local x, y, i
-    repeat
-      x = rand(self.width)
-      y = rand(self.height)
-      i = self:index(x, y)
-    until (
-        self.unrevealed_count - self.mine_count <= 8
-        or not is_adjacent(safe_x, safe_y, x, y)
-      ) and not self.mines[i]
-
-    self.mines[i] = true
-    self.mine_count = self.mine_count + 1
-    for ay = y - 1, y + 1 do
-      for ax = x - 1, x + 1 do
-        local ai = self:index(ax, ay)
-        if ai then
-          self.danger[ai] = self.danger[ai] + 1
-        end
-      end
-    end
-  end
-
-  api.nvim_del_var "_nvimesweeper_seed"
+function Board:state(i)
+  return self.state_ptr[i - 1]
 end
 
-function Board:reset()
-  self.flag_count = 0
-  self.unrevealed_count = self.width * self.height
-  self.mine_count = 0
-  self.mines = {}
+function Board:mine(i)
+  return self.mines_ptr[i - 1] ~= 0
+end
 
-  for i = 1, self.width * self.height do
-    self.state[i] = M.SQUARE_NONE
-    self.danger[i] = 0
+function Board:danger(i)
+  return self.danger_ptr[i - 1]
+end
+
+function Board:place_mines(i, seed)
+  if native.place_mines(self.handle, i, seed) == 0 then
+    error "failed to place mines!"
   end
+end
+
+-- returns the number of squares revealed, plus the 0-based bounding box of
+-- those squares (only returned when squares were revealed)
+function Board:reveal_at(i)
+  return native.reveal(self.handle, i)
 end
 
 function Board:flag_unrevealed(i, new_state)
-  if new_state == M.SQUARE_REVEALED then
-    return false
-  end
-
-  local state = self.state[i]
-  if state == M.SQUARE_REVEALED then
-    return false
-  elseif state == new_state then
-    return true
-  end
-
-  if new_state == M.SQUARE_FLAGGED then
-    self.flag_count = self.flag_count + 1
-  elseif state == M.SQUARE_FLAGGED then
-    self.flag_count = self.flag_count - 1
-  end
-
-  self.state[i] = new_state
-  return true
+  return native.flag(self.handle, i, new_state) ~= 0
 end
 
-function Board:reveal_square(i)
-  local state = self.state[i]
-  if not M.is_revealable(state) then
-    return false
+function Board:free()
+  if self.handle then
+    native.free(self.handle)
+    self.handle = nil
+    self.state_ptr, self.mines_ptr, self.danger_ptr = nil, nil, nil
   end
-
-  self.state[i] = M.SQUARE_REVEALED
-  self.unrevealed_count = self.unrevealed_count - 1
-  return true
 end
 
-function Board:fill_reveal(x, y, reveal_cb)
-  local i = self:index(x, y)
-  if not i then
-    return 0
+function M.new_board(width, height, mine_count)
+  local handle = native.new(width, height, mine_count)
+  if handle == 0 then
+    error(
+      ("cannot create a %dx%d board with %d mines!"):format(
+        width,
+        height,
+        mine_count
+      )
+    )
   end
 
-  -- fill-reveal surrounding squares with 0 danger score
-  local prev_unrevealed_count = self.unrevealed_count
-  local needs_reveal = { { x, y, i } }
-  while #needs_reveal > 0 do
-    local top = needs_reveal[#needs_reveal]
-    local tx, ty, ti = top[1], top[2], top[3]
-    needs_reveal[#needs_reveal] = nil
-
-    local ok = self:reveal_square(ti)
-    if ok and reveal_cb then
-      reveal_cb(tx, ty, ti)
-    end
-    if ok and self.danger[ti] == 0 then
-      for ay = ty - 1, ty + 1 do
-        for ax = tx - 1, tx + 1 do
-          local ai = self:index(ax, ay)
-          if ai and M.is_revealable(self.state[ai]) then
-            needs_reveal[#needs_reveal + 1] = { ax, ay, ai }
-          end
-        end
-      end
-    end
-  end
-
-  return prev_unrevealed_count - self.unrevealed_count
-end
-
-function M.new_board(width, height)
-  local board = setmetatable({
+  return setmetatable({
+    handle = handle,
     width = width,
     height = height,
-    state = {},
-    danger = {},
+    state_ptr = native.state(handle),
+    mines_ptr = native.mines(handle),
+    danger_ptr = native.danger(handle),
   }, {
-    __index = Board,
+    __index = board_index,
   })
-
-  board:reset()
-  return board
 end
 
 return M

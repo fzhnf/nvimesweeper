@@ -1,15 +1,11 @@
-local api = vim.api
-
 local M = {}
 
 function M.reload()
-  package.loaded["nvimesweeper"] = nil
-  package.loaded["nvimesweeper.board"] = nil
-  package.loaded["nvimesweeper.config"] = nil
-  package.loaded["nvimesweeper.game"] = nil
-  package.loaded["nvimesweeper.game_state"] = nil
-  package.loaded["nvimesweeper.ui"] = nil
-  package.loaded["nvimesweeper.util"] = nil
+  for name in pairs(package.loaded) do
+    if name == "nvimesweeper" or name:match "^nvimesweeper%." then
+      package.loaded[name] = nil
+    end
+  end
   return require "nvimesweeper"
 end
 
@@ -27,14 +23,11 @@ function M.nnoremap(buf, lhs, rhs, desc)
   end
 
   for _, value in ipairs(lhs) do
-    local callback = type(rhs) == "function" and rhs or nil
-    api.nvim_buf_set_keymap(
-      buf,
-      "n",
-      value,
-      callback and "" or rhs,
-      { noremap = true, silent = true, callback = callback, desc = desc }
-    )
+    vim.keymap.set("n", value, rhs, {
+      buffer = buf,
+      silent = true,
+      desc = desc,
+    })
   end
 end
 

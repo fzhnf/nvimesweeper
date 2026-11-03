@@ -1,4 +1,4 @@
-local api, uv = vim.api, vim.loop
+local api, uv = vim.api, vim.uv
 
 local game_state = require "nvimesweeper.game_state"
 local board_mod = require "nvimesweeper.board"
@@ -9,8 +9,7 @@ local M = {}
 local Game = {}
 
 function M.new_game(width, height, mine_count, seed, open_tab)
-  local board = board_mod.new_board(width, height)
-  board.mine_count = mine_count
+  local board = board_mod.new_board(width, height, mine_count)
 
   local game = setmetatable({
     state = game_state.GAME_NOT_STARTED,
@@ -45,7 +44,7 @@ function M.place_marker(new_state, buf, x, y)
     return false
   end
 
-  local state = game.board.state[i]
+  local state = game.board:state(i)
   if not new_state then
     if state == board_mod.SQUARE_NONE then
       new_state = board_mod.SQUARE_FLAGGED
@@ -74,30 +73,22 @@ function M.reveal(buf, x, y)
     return false
   end
 
-  local state = game.board.state[i]
+  local state = game.board:state(i)
   if
     game.state == game_state.GAME_NOT_STARTED and board_mod.is_revealable(state)
   then
-    game.board:place_mines(x, y, game.seed)
+    game.board:place_mines(i, game.seed)
     game.state = game_state.GAME_STARTED
     game.start_time = uv.hrtime()
     game.ui:start_status_redraw()
   end
 
-  local changed_x1, changed_y1 = game.board.width, game.board.height
-  local changed_x2, changed_y2 = 0, 0
-  if
-    game.board:fill_reveal(x, y, function(sx, sy, _)
-      changed_x1 = math.min(changed_x1, sx)
-      changed_y1 = math.min(changed_y1, sy)
-      changed_x2 = math.max(changed_x2, sx)
-      changed_y2 = math.max(changed_y2, sy)
-    end) == 0
-  then
+  local changed, x1, y1, x2, y2 = game.board:reveal_at(i)
+  if changed == 0 then
     return false
   end
 
-  if game.board.mines[i] then
+  if game.board:mine(i) then
     game.state = game_state.GAME_LOST
   elseif game.board.unrevealed_count == game.board.mine_count then
     game.state = game_state.GAME_WON
@@ -108,7 +99,7 @@ function M.reveal(buf, x, y)
     game.ui:stop_status_redraw()
     game.ui:redraw_board()
   else
-    game.ui:redraw_board(changed_x1, changed_y1, changed_x2, changed_y2)
+    game.ui:redraw_board(x1, y1, x2, y2)
   end
 
   return true

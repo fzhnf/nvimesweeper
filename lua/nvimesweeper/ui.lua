@@ -1,4 +1,4 @@
-local api, fn, uv = vim.api, vim.fn, vim.loop
+local api, fn, uv = vim.api, vim.fn, vim.uv
 
 local config_mod = require "nvimesweeper.config"
 local board_mod = require "nvimesweeper.board"
@@ -15,7 +15,7 @@ local ns = api.nvim_create_namespace "nvimesweeper"
 local Ui = {}
 
 function Ui:enable_modification(enable)
-  api.nvim_buf_set_option(self.buf, "modifiable", enable)
+  vim.bo[self.buf].modifiable = enable
 end
 
 local function centering_left_pad(ui, len)
@@ -78,17 +78,12 @@ function Ui:redraw_status()
   self:enable_modification(false)
 
   if hl_col1 then
-    self.status_hl_extmark = api.nvim_buf_set_extmark(
-      self.buf,
-      ns,
-      0,
-      hl_col1 + left_pads[1],
-      {
+    self.status_hl_extmark =
+      api.nvim_buf_set_extmark(self.buf, ns, 0, hl_col1 + left_pads[1], {
         id = self.status_hl_extmark,
         end_col = hl_col2 + left_pads[1],
         hl_group = hl_group,
-      }
-    )
+      })
   elseif self.status_hl_extmark then
     api.nvim_buf_del_extmark(self.buf, ns, self.status_hl_extmark)
     self.status_hl_extmark = nil
@@ -97,9 +92,10 @@ end
 
 function Ui:board_square_char(i)
   local board_chars = config_mod.config.board_chars
+  local board = self.game.board
   local game_over = game_state.is_game_over(self.game.state)
-  local state = self.game.board.state[i]
-  local mine = self.game.board.mines[i]
+  local state = board:state(i)
+  local mine = board:mine(i)
   local char = board_chars.unrevealed
 
   if
@@ -116,7 +112,7 @@ function Ui:board_square_char(i)
   elseif state == board_mod.SQUARE_MAYBE then
     char = board_chars.maybe
   elseif state == board_mod.SQUARE_REVEALED then
-    local danger = self.game.board.danger[i]
+    local danger = board:danger(i)
     char = danger > 0 and tostring(danger) or board_chars.revealed
   end
 
@@ -124,11 +120,12 @@ function Ui:board_square_char(i)
 end
 
 function Ui:board_square_hl_group(i)
+  local board = self.game.board
   local game_over = game_state.is_game_over(self.game.state)
-  local state = self.game.board.state[i]
+  local state = board:state(i)
   local hl_group = "NvimesweeperUnrevealed"
 
-  if game_over and self.game.board.mines[i] then
+  if game_over and board:mine(i) then
     if state == board_mod.SQUARE_REVEALED then
       hl_group = "NvimesweeperTriggeredMine"
     elseif state == board_mod.SQUARE_FLAGGED then
@@ -141,7 +138,7 @@ function Ui:board_square_hl_group(i)
   elseif state == board_mod.SQUARE_MAYBE then
     hl_group = "NvimesweeperMaybe"
   elseif state == board_mod.SQUARE_REVEALED then
-    local danger = self.game.board.danger[i]
+    local danger = board:danger(i)
     hl_group = danger > 0 and ("NvimesweeperDanger" .. danger)
       or "NvimesweeperRevealed"
   end
@@ -184,17 +181,12 @@ function Ui:redraw_board(x1, y1, x2, y2)
     local mark_y = top_left_pos[1] + y - y1
     for x = x1, x2 do
       local mark_x = top_left_pos[2] + x - x1
-      self.board_extmarks[i] = api.nvim_buf_set_extmark(
-        self.buf,
-        ns,
-        mark_y,
-        mark_x,
-        {
+      self.board_extmarks[i] =
+        api.nvim_buf_set_extmark(self.buf, ns, mark_y, mark_x, {
           id = self.board_extmarks[i],
           end_col = mark_x + 1,
           hl_group = self:board_square_hl_group(i),
-        }
-      )
+        })
       i = i + 1
     end
   end
@@ -240,16 +232,13 @@ end
 
 function Ui:cleanup()
   self:stop_status_redraw()
+  self.game.board:free()
   M.uis[self.buf] = nil
 end
 
 function Ui:board_square_pos(i)
-  local pos = api.nvim_buf_get_extmark_by_id(
-    self.buf,
-    ns,
-    self.board_extmarks[i],
-    {}
-  )
+  local pos =
+    api.nvim_buf_get_extmark_by_id(self.buf, ns, self.board_extmarks[i], {})
   return pos
 end
 
@@ -271,11 +260,8 @@ local function create_window(ui, float_opts)
       relative = "editor",
       width = float_opts.width,
       height = float_opts.height,
-      row = math.max(
-        0,
-        math.floor((api.nvim_get_option "lines" - float_opts.height) / 2) - 1
-      ),
-      col = math.floor((api.nvim_get_option "columns" - float_opts.width) / 2),
+      row = math.max(0, math.floor((vim.o.lines - float_opts.height) / 2) - 1),
+      col = math.floor((vim.o.columns - float_opts.width) / 2),
       style = "minimal",
       border = "single",
     })
@@ -292,7 +278,7 @@ local function create_window(ui, float_opts)
   end
 
   if float_opts then
-    api.nvim_buf_set_option(ui.buf, "bufhidden", "wipe")
+    vim.bo[ui.buf].bufhidden = "wipe"
 
     -- Schedule the deletion. NOTE: if we don't schedule, this can cause issues
     -- when starting a new game in a float if we are already playing a game in a
@@ -322,12 +308,12 @@ local function create_window(ui, float_opts)
     })
   else
     -- float "minimal" style already sets these
-    api.nvim_win_set_option(win, "list", false)
-    api.nvim_win_set_option(win, "spell", false)
+    vim.wo[win].list = false
+    vim.wo[win].spell = false
   end
   ui.centered = float_opts ~= nil
 
-  api.nvim_win_set_option(win, "wrap", false)
+  vim.wo[win].wrap = false
   return true
 end
 
@@ -399,11 +385,15 @@ function M.new_ui(game, open_tab)
     game_mod.place_marker(board_mod.SQUARE_MAYBE)
   end, "Mark square")
 
-  api.nvim_create_autocmd({ "BufDelete", "VimLeavePre" }, {
+  -- BufDelete is not emitted when bufhidden=wipe unloads a float buffer, so
+  -- BufWipeout is needed as well to free the engine board
+  api.nvim_create_autocmd({ "BufDelete", "BufWipeout", "VimLeavePre" }, {
     buffer = buf,
     once = true,
     callback = function()
-      M.uis[buf]:cleanup()
+      if M.uis[buf] then
+        M.uis[buf]:cleanup()
+      end
     end,
   })
 

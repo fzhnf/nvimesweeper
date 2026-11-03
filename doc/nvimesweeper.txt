@@ -3,7 +3,12 @@
 Author:  Sean Dewar <https://github.com/seandewar>
 License: MIT
 
-This plugin requires Neovim version 0.7 or newer.
+This plugin requires Neovim version 0.12 or newer.
+
+The game engine is a native library written in Odin and shipped in the plugin's
+"lib/" directory. Only "linux-amd64" is prebuilt; on other platforms build it
+from the "odin/" sources, see:
+https://github.com/fzhnf/nvimesweeper#building-the-engine
 
 ==============================================================================
 CONFIGURATION					*nvimesweeper-configure*
@@ -35,15 +40,17 @@ COMMANDS					*nvimesweeper-commands*
 					mines.
 					Takes an integer. Defaults to the
 					current time in seconds (from
-					`vim.loop.gettimeofday()`).
+					`os.time()`).
 
 					Using the same seed with the same
 					"width", "height" and "mines" settings
 					will result in the same mine locations
-					between games.
+					between games, as long as the engine
+					library has not changed.
 
-					The |srand()| and |rand()| functions
-					are used to randomize the mines.
+					The engine places mines using
+					`core:math/rand` from the Odin
+					standard library.
 
 			"tab"		Display the game in a new tab page
 					window, rather than a floating window.
@@ -296,6 +303,10 @@ NvimesweeperDanger8
 ABOUT						*nvimesweeper-about*
 
 Grab the latest version or report a bug on GitHub:
+
+https://github.com/fzhnf/nvimesweeper
+
+Nvimesweeper is a fork of the original plugin by Sean Dewar:
 
 https://github.com/seandewar/nvimesweeper
 
