@@ -1,29 +1,86 @@
-![Banner Image](./media/nvimesweeper.png)
+# vibe-coded fork of nvimesweeper
 
-![Screenshot](./media/screenshot.png)
+A lazy AI-Slop refactoring from [seandewar/nvimesweeper], i'm just wanted to
+dip quickly without learning the hustle, as a programmer i'm sorry for being
+lazy.
 
-Play Minesweeper in Neovim: because if Emacs has taught us anything, it's that
-text editors are for gaming!
+![screenshot](media/screenshot.png)
 
-Requires Neovim version 0.7 or above.
+## Requirements
 
-_Note that an `nvim-0.5` branch exists for compatibility with Nvim v0.5+, but it
-is no longer maintained._
+- Neovim 0.12.0 or newer.
 
-## How to play
+## Installation
 
-Install it using your favourite package manager like any other plugin, then run
-`:Nvimesweeper` and pray that it works properly, I guess.
+Use Neovim's built-in package manager ([`:h vim.pack`]):
 
-- Press `!` to flag a square.
-- Press `?` to mark a square for later.
-- Press `<Space>` or `<RightMouse>` to cycle between `!`, `?` and unmarking a
-  square.
-- Press `<CR>`, `x` or `<LeftMouse>` to reveal a square; just try not to step on
-  a mine!
+```lua
+vim.pack.add {
+  { src = "https://github.com/fzhnf/nvimesweeper" },
+}
+```
 
-Run `:help nvimesweeper` for more details.
+To pin a release instead, pass a plain tag string: `version = "v0.1.0"`.
 
-## Why did you make this?
+### Installing binary
 
-I don't know...
+`vim.pack` only clones; the engine is a native library, so fetch it on
+install/update. Register this **before** `vim.pack.add`:
+
+```lua
+vim.api.nvim_create_autocmd("PackChanged", {
+  callback = function(ev)
+    if ev.data.spec.name ~= "nvimesweeper" then return end
+    if ev.data.kind ~= "install" and ev.data.kind ~= "update" then return end
+    if not ev.data.active then
+      vim.cmd.packadd { args = { "nvimesweeper" }, bang = true }
+    end
+    local native = require("nvimesweeper.native")
+    if native.prefetch then native.prefetch() end
+  end,
+})
+```
+
+Only `linux-amd64` has a published binary; elsewhere build it with
+`odin build odin -build-mode:shared -out:lib/<os>-<arch>/libnvimesweeper.so`.
+
+Restart Neovim (`:restart`), then start a game with `:Nvimesweeper`.
+
+## Usage
+
+```vim
+:Nvimesweeper                     " pick a preset
+:Nvimesweeper hard mines=120      " preset with more mines
+:Nvimesweeper tab width=100 height=20 mines=200
+:Nvimesweeper seed=42 width=9 height=9 mines=10
+```
+
+See `:help nvimesweeper` for every option, mapping and highlight group.
+
+Presets: `easy` (9x9, 10 mines), `medium` (16x16, 40), `hard` (30x16, 99),
+`insane` (40x16, 192), `nightmare` (60x16, 384).
+
+In a game: `<CR>`/`x` reveals, `<Space>` cycles flag/mark, `!` flags, `?` marks,
+`<F1>` opens the help, and the mouse buttons do the same as `<CR>`/`<Space>`.
+
+## Configuration
+
+```lua
+require("nvimesweeper").setup {
+  opts = { tab = true },
+  presets = {
+    ["very easy"] = { width = 5, height = 5, mines = 5 },
+  },
+  prompt_presets = { "very easy", "hard" },
+  board_chars = { mine = "@", flag = "F" },
+}
+```
+
+## License
+
+MIT, see [LICENSE](LICENSE). Original plugin by [seandewar/nvimesweeper];
+`Nvimesweeper`'s gameplay, help text and highlights come from it. please just
+see the original instead of this lazy AI-Slop.
+
+[seandewar/nvimesweeper]: https://github.com/seandewar/nvimesweeper
+[`:h vim.pack`]: https://neovim.io/doc/user/pack.html#vim.pack
