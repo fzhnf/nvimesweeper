@@ -65,8 +65,10 @@ board needs `width * 3` columns (`hard` needs 90).
 
 In a game: `h`/`j`/`k`/`l` (or the arrow keys) move between squares, `<CR>`/`x`
 reveals, `<Space>` cycles flag/mark, `!` flags, `?` marks, `q` closes the window
-but keeps the game (reopen it with `:b [nvimesweeper`), `Q` destroys the game,
-`<F1>` opens the help, and the mouse buttons do the same as `<CR>`/`<Space>`.
+but keeps the game (`:Nvimesweeper` reopens it in the same float), `Q` destroys
+the game, `<F1>` opens the help, and the mouse buttons do the same as
+`<CR>`/`<Space>`. `:Nvimesweeper new` starts a fresh game even when one is
+closed.
 
 ## Configuration
 

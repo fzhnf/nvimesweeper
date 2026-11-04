@@ -2,6 +2,7 @@ local fn, ui = vim.fn, vim.ui
 
 local config_mod = require "nvimesweeper.config"
 local game = require "nvimesweeper.game"
+local ui_mod = require "nvimesweeper.ui"
 local util = require "nvimesweeper.util"
 local error = util.error
 
@@ -142,20 +143,42 @@ end
 
 function M.play_cmd(args)
   args = vim.split(args or "", " ")
+  local force_new = false
   local opts = {}
-  for _, arg in ipairs(args) do
+  for i, arg in ipairs(args) do
     if arg ~= "" then
-      local opt, equal, value_str = string.match(arg, "([^=]+)(=?)(.*)")
-      if not opt then
-        error "malformed arguments!"
-      elseif equal == "" then
-        value_str = "true"
+      if i == 1 and arg == "new" then
+        force_new = true
+      else
+        local opt, equal, value_str = string.match(arg, "([^=]+)(=?)(.*)")
+        if not opt then
+          error "malformed arguments!"
+        elseif equal == "" then
+          value_str = "true"
+        end
+        opts[opt] = value_str -- this will be converted by play()
       end
-      opts[opt] = value_str -- this will be converted by play()
     end
   end
 
+  if not force_new and next(opts) == nil and M.resume() then
+    return
+  end
+
   M.play(opts)
+end
+
+-- put the most recently created game that is not on screen back in its window
+function M.resume()
+  local newest
+  for _, game_ui in pairs(ui_mod.uis) do
+    if #fn.win_findbuf(game_ui.buf) == 0 then
+      if not newest or (game_ui.id or 0) > (newest.id or 0) then
+        newest = game_ui
+      end
+    end
+  end
+  return newest ~= nil and newest:reopen() or false
 end
 
 return M

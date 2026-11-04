@@ -14,6 +14,9 @@ local M = {
 local ns = api.nvim_create_namespace "nvimesweeper"
 local Ui = {}
 
+-- creation order, so `resume` can pick the most recent hidden game
+local next_ui_id = 1
+
 -- terminal cells are about three times taller than wide, so a square spans
 -- CELL_WIDTH columns to look square
 local CELL_WIDTH = 3
@@ -354,15 +357,19 @@ function Ui:close_pane()
   end
 end
 
-local function create_window(ui, float_opts)
+-- opens the game in its window recipe: a sized float, or a new tab page
+local function create_window(ui, window)
   local win
-  if float_opts then
+  if window.kind == "float" then
+    -- clamp so a large board or a small editor does not make the open fail
+    local width = math.max(1, math.min(window.width, vim.o.columns - 2))
+    local height = math.max(3, math.min(window.height, vim.o.lines - 2))
     win = api.nvim_open_win(ui.buf, true, {
       relative = "editor",
-      width = float_opts.width,
-      height = float_opts.height,
-      row = math.max(0, math.floor((vim.o.lines - float_opts.height) / 2) - 1),
-      col = math.floor((vim.o.columns - float_opts.width) / 2),
+      width = width,
+      height = height,
+      row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),
+      col = math.max(0, math.floor((vim.o.columns - width) / 2)),
       style = "minimal",
       border = "single",
     })
@@ -378,7 +385,7 @@ local function create_window(ui, float_opts)
     return false
   end
 
-  if float_opts then
+  if window.kind == "float" then
     -- the game outlives its window: `q` hides it, `Q` deletes it
     vim.bo[ui.buf].bufhidden = "hide"
   else
@@ -389,6 +396,17 @@ local function create_window(ui, float_opts)
 
   vim.wo[win].wrap = false
   return true
+end
+
+-- put a hidden game back into its original kind of window; `BufWinEnter`
+-- repaints it and restarts the clock
+function Ui:reopen()
+  local wins = fn.win_findbuf(self.buf)
+  if #wins > 0 then
+    api.nvim_set_current_win(wins[1])
+    return true
+  end
+  return create_window(self, self.window)
 end
 
 local function move_cursor_to_click()
@@ -413,16 +431,18 @@ function M.new_ui(game, open_tab)
     game = game,
     board_extmarks = {},
     redraw_status_timer = uv.new_timer(),
+    id = next_ui_id,
+    window = open_tab and { kind = "tab" } or {
+      kind = "float",
+      width = math.max(42, game.board.width * CELL_WIDTH),
+      height = game.board.height + 5,
+    },
   }, {
     __index = Ui,
   })
+  next_ui_id = next_ui_id + 1
 
-  if
-    not create_window(ui, not open_tab and {
-      width = math.max(42, game.board.width * CELL_WIDTH),
-      height = game.board.height + 5,
-    } or nil)
-  then
+  if not create_window(ui, ui.window) then
     api.nvim_buf_delete(buf, { force = true })
     error "failed to open game window!"
   end

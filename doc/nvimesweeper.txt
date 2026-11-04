@@ -18,8 +18,15 @@ see |nvimesweeper-highlight-groups|.
 COMMANDS					*nvimesweeper-commands*
 
 						*:Nvimesweeper*
-:Nvimesweeper [args]	Starts a new game of Nvimesweeper.
+:Nvimesweeper [args]	Starts a new game of Nvimesweeper, or reopens the
+			game you closed with |nvimesweeper_q|.
 
+			With no arguments, a closed game is reopened in
+			its original window; if there is none, you are
+			prompted for a preset. Pass "new" as the first
+			argument to always start a new game, e.g.: >
+				:Nvimesweeper new hard
+<
 			The following optional arguments are supported:
 
 			"width"		Width of the board in squares.
@@ -56,7 +63,8 @@ COMMANDS					*nvimesweeper-commands*
 			Arguments are specified in the format `arg=value`.
 			Boolean arguments, such as "tab", may simply be
 			specified as `arg` to be set to true. Game presets may
-			be specified as booleans.
+			be specified as booleans. "new" as the first argument
+			skips reopening a closed game.
 
 			If any of the "width", "height" or "mines" arguments
 			are omitted, you will be prompted for their values. If
@@ -127,10 +135,9 @@ h j k l or arrows	Move between squares. The cursor is kept on a square
 			later if you are unsure.
 
 					*nvimesweeper_q*
-q			Close the game window but keep the game, so it can
-			be reopened later, for example with: >
-				:b [nvimesweeper
-<
+q			Close the game window but keep the game. Run
+			|:Nvimesweeper| with no arguments to reopen it in
+			its original window.
 
 					*nvimesweeper_Q*
 Q			Destroy the game: closes its window and frees the
