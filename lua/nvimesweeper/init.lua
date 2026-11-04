@@ -105,6 +105,18 @@ function M.play(opts)
     game.new_game(opts.width, opts.height, opts.mines, opts.seed, opts.tab)
   end
 
+  -- a seed alone cannot define a board: reuse the size and mine count of the
+  -- most recent game, so `:Nvimesweeper seed=123` replays that board
+  if opts.seed and not opts.width and not opts.height and not opts.mines then
+    local previous = ui_mod.latest()
+    if previous then
+      local board = previous.game.board
+      opts.width = board.width
+      opts.height = board.height
+      opts.mines = board.mine_count
+    end
+  end
+
   -- if nothing was specified for the board size and mine count, prompt for a
   -- preset to use instead
   if not opts.width and not opts.height and not opts.mines then

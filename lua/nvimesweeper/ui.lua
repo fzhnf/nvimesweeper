@@ -107,7 +107,13 @@ function Ui:redraw_status()
     end
     hl_col1, hl_col2 = 0, #status[1]
     status[1] = status[1] .. " " .. time_string(true)
-    status[2] = "Seed: " .. self.game.seed
+    -- everything needed to play this board again
+    status[2] = ("%dx%d, %d mines, seed %d"):format(
+      self.game.board.width,
+      self.game.board.height,
+      self.game.board.mine_count,
+      self.game.seed
+    )
   end
 
   local left_pads = {}
@@ -379,6 +385,17 @@ local function float_config(width, height)
 end
 
 -- opens the game in its window recipe: a sized float, or a new tab page
+-- most recently created game, whether it is on screen or hidden
+function M.latest()
+  local newest
+  for _, ui in pairs(M.uis) do
+    if not newest or (ui.id or 0) > (newest.id or 0) then
+      newest = ui
+    end
+  end
+  return newest
+end
+
 local function create_window(ui, window)
   local win
   if window.kind == "float" then

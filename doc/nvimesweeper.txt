@@ -49,6 +49,12 @@ COMMANDS					*nvimesweeper-commands*
 					will result in the same mine locations
 					between games.
 
+					If only a seed is given, the width,
+					height and mine count of the most recent
+					game are reused, so `:Nvimesweeper
+					seed=123` plays that board again. A
+					preset or explicit sizes take precedence.
+
 
 			"tab"		Display the game in a new tab page
 					window, rather than a floating window.

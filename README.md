@@ -53,9 +53,13 @@ Restart Neovim (`:restart`), then start a game with `:Nvimesweeper`.
 :Nvimesweeper hard mines=120      " preset with more mines
 :Nvimesweeper tab width=100 height=20 mines=200
 :Nvimesweeper seed=42 width=9 height=9 mines=10
+:Nvimesweeper seed=42            " replay the last board's size with this seed
 ```
 
 See `:help nvimesweeper` for every option, mapping and highlight group.
+
+When a game ends its status line shows the board size, mine count and seed, so
+the same board can be replayed later.
 
 Presets: `easy` (9x9, 10 mines), `medium` (16x16, 40), `hard` (30x16, 99),
 `insane` (40x16, 192), `nightmare` (60x16, 384).
