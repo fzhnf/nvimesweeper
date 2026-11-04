@@ -17,7 +17,7 @@ function M.is_integer(number)
   return type(number) == "number" and math.floor(number) == number
 end
 
-function M.nnoremap(buf, lhs, rhs, desc)
+function M.nnoremap(buf, lhs, rhs, desc, nowait)
   if type(lhs) == "string" then
     lhs = { lhs }
   end
@@ -27,6 +27,7 @@ function M.nnoremap(buf, lhs, rhs, desc)
       buffer = buf,
       silent = true,
       desc = desc,
+      nowait = nowait ~= false,
     })
   end
 end

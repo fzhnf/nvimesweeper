@@ -86,6 +86,11 @@ MAPS						*nvimesweeper-maps*
 
 In a game of Nvimesweeper, these buffer-local mappings are defined:
 
+					*nvimesweeper_h* *nvimesweeper_j*
+					*nvimesweeper_k* *nvimesweeper_l*
+h j k l or arrows	Move between squares. The cursor is kept on a square
+			centre and cannot leave the board.
+
 						*nvimesweeper_<F1>*
 <F1>			Opens this help file.
 
@@ -120,6 +125,16 @@ In a game of Nvimesweeper, these buffer-local mappings are defined:
 			Unlike flagged squares, marked squares can be
 			revealed. Useful for marking a square to be revisited
 			later if you are unsure.
+
+					*nvimesweeper_q*
+q			Close the game window but keep the game, so it can
+			be reopened later, for example with: >
+				:b [nvimesweeper
+<
+
+					*nvimesweeper_Q*
+Q			Destroy the game: closes its window and frees the
+			game state.
 
 ==============================================================================
 READING THE BOARD				*nvimesweeper-board*

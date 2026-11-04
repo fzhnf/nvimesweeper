@@ -25,8 +25,28 @@ local function square_text(char)
   return string.rep(" ", left) .. char .. string.rep(" ", pad - left)
 end
 
--- shown under the board; keep it short enough for the narrowest float
-local HINTS = "<CR> reveal  <Space> flag/mark  F1 help"
+-- shown under the board; keep each short enough for the narrowest float
+local HINTS = {
+  "<CR> reveal  <Space> flag/mark",
+  "q close  Q kill  F1 help",
+}
+
+-- while a game window is focused, mappings resolve faster so that <Space> alone
+-- does not have to wait out the configured chord window
+local GAME_TIMEOUTLEN = 100
+
+local function scope_timeout(ui, to_game)
+  if to_game then
+    ui.saved_timeoutlen = ui.saved_timeoutlen or vim.o.timeoutlen
+    vim.o.timeoutlen = GAME_TIMEOUTLEN
+  elseif ui.saved_timeoutlen and vim.o.timeoutlen == GAME_TIMEOUTLEN then
+    vim.o.timeoutlen = ui.saved_timeoutlen
+    ui.saved_timeoutlen = nil
+  else
+    -- changed by hand meanwhile: leave it alone
+    ui.saved_timeoutlen = nil
+  end
+end
 
 function Ui:enable_modification(enable)
   vim.bo[self.buf].modifiable = enable
@@ -214,6 +234,7 @@ function Ui:redraw_board(x1, y1, x2, y2)
 end
 
 function Ui:full_redraw()
+  self.centered = api.nvim_win_get_config(0).relative ~= ""
   self:redraw_status()
 
   -- usually, only the changed area of the board is updated, which requires the
@@ -228,10 +249,18 @@ function Ui:full_redraw()
 
   -- keybind hints, centred like the board
   lines[#lines + 1] = ""
-  lines[#lines + 1] = string.rep(" ", centering_left_pad(self, #HINTS)) .. HINTS
+  for _, hint in ipairs(HINTS) do
+    lines[#lines + 1] = string.rep(" ", centering_left_pad(self, #hint)) .. hint
+  end
+
+  -- extmarks below the status rows are recreated on every repaint
+  self.board_extmarks = {}
 
   self:enable_modification(true)
-  api.nvim_buf_set_lines(self.buf, -1, -1, false, lines)
+  -- rows 0-1 hold the status; replacing everything below keeps repaints of an
+  -- existing buffer idempotent
+  api.nvim_buf_set_lines(self.buf, 2, -1, false, lines)
+  self:enable_modification(false)
 
   -- place an extmark for the board's top-left corner so it knows where to draw
   self.board_extmarks[1] = api.nvim_buf_set_extmark(self.buf, ns, 2, left_pad, {
@@ -245,7 +274,11 @@ function Ui:start_status_redraw()
     0,
     1000,
     vim.schedule_wrap(function()
-      if api.nvim_buf_is_loaded(self.buf) then
+      -- a hidden game must not centre its status against another window
+      if
+        api.nvim_buf_is_loaded(self.buf)
+        and api.nvim_get_current_buf() == self.buf
+      then
         self:redraw_status()
       end
     end)
@@ -258,6 +291,7 @@ end
 
 function Ui:cleanup()
   self:stop_status_redraw()
+  scope_timeout(self, false)
   self.game.board:free()
   M.uis[self.buf] = nil
 end
@@ -277,6 +311,47 @@ function Ui:win_to_board_pos(wx, wy)
     wx, wy = cursor_pos[2], cursor_pos[1] - 1
   end
   return math.floor((wx - board_pos[2]) / CELL_WIDTH), wy - board_pos[1]
+end
+
+-- square under the cursor, clamped into the board
+function Ui:cursor_tile()
+  local x, y = self:win_to_board_pos()
+  return math.max(0, math.min(self.game.board.width - 1, x)),
+    math.max(0, math.min(self.game.board.height - 1, y))
+end
+
+-- move the cursor to a square centre, clamping at the board edges
+function Ui:put_cursor_on_tile(x, y)
+  x = math.max(0, math.min(self.game.board.width - 1, x))
+  y = math.max(0, math.min(self.game.board.height - 1, y))
+  local origin = self:board_square_pos(1)
+  api.nvim_win_set_cursor(0, {
+    origin[1] + y + 1,
+    origin[2] + x * CELL_WIDTH + math.floor(CELL_WIDTH / 2),
+  })
+end
+
+-- keep the cursor on a square centre, and inside the board
+function Ui:snap_cursor()
+  if api.nvim_get_current_buf() ~= self.buf or not self.board_extmarks[1] then
+    return
+  end
+  local x, y = self:cursor_tile()
+  local origin = self:board_square_pos(1)
+  local want = {
+    origin[1] + y + 1,
+    origin[2] + x * CELL_WIDTH + math.floor(CELL_WIDTH / 2),
+  }
+  if not vim.deep_equal(api.nvim_win_get_cursor(0), want) then
+    api.nvim_win_set_cursor(0, want)
+  end
+end
+
+-- close the window but keep the game, so it can be reopened
+function Ui:close_pane()
+  if not pcall(vim.cmd, "close") then
+    vim.cmd "enew"
+  end
 end
 
 local function create_window(ui, float_opts)
@@ -304,40 +379,13 @@ local function create_window(ui, float_opts)
   end
 
   if float_opts then
-    vim.bo[ui.buf].bufhidden = "wipe"
-
-    -- Schedule the deletion. NOTE: if we don't schedule, this can cause issues
-    -- when starting a new game in a float if we are already playing a game in a
-    -- different float: both floats will be closed.
-    --
-    -- Backstory: this is inherited from Vim's windowing behaviour; the new
-    -- float briefly edits the current buffer before it edits its intended
-    -- buffer (similiar to :split, then :buffer <buf>). The current buffer's
-    -- WinLeave autocmd (intended for the previous float) will delete the
-    -- buffer while the new float is still momentarily editing it, causing both
-    -- floats to close! By delaying the deletion, we allow the new float to
-    -- switch to its intended buffer first.
-    --
-    -- Funnily enough, this uncovered a crash in nvim_open_win() when I used
-    -- BufLeave instead: https://github.com/neovim/neovim/pull/15549 -- So, you
-    -- can say this silly Minesweeper clone helped improve Neovim... :P
-    api.nvim_create_autocmd("WinLeave", {
-      buffer = ui.buf,
-      once = true,
-      callback = function()
-        vim.schedule(function()
-          if api.nvim_buf_is_valid(ui.buf) then
-            api.nvim_buf_delete(ui.buf, { force = true })
-          end
-        end)
-      end,
-    })
+    -- the game outlives its window: `q` hides it, `Q` deletes it
+    vim.bo[ui.buf].bufhidden = "hide"
   else
     -- float "minimal" style already sets these
     vim.wo[win].list = false
     vim.wo[win].spell = false
   end
-  ui.centered = float_opts ~= nil
 
   vim.wo[win].wrap = false
   return true
@@ -354,7 +402,8 @@ local function move_cursor_to_click()
 end
 
 function M.new_ui(game, open_tab)
-  local buf = api.nvim_create_buf(open_tab, true)
+  -- listed so a hidden game can be found again with `:b [nvimesweeper`
+  local buf = api.nvim_create_buf(true, true)
   if buf == 0 then
     error "failed to create game buffer!"
   end
@@ -371,7 +420,7 @@ function M.new_ui(game, open_tab)
   if
     not create_window(ui, not open_tab and {
       width = math.max(42, game.board.width * CELL_WIDTH),
-      height = game.board.height + 4,
+      height = game.board.height + 5,
     } or nil)
   then
     api.nvim_buf_delete(buf, { force = true })
@@ -402,7 +451,14 @@ function M.new_ui(game, open_tab)
   end, "Cycle square marker using the mouse")
 
   util.nnoremap(buf, { "<CR>", "x" }, game_mod.reveal, "Reveal square")
-  util.nnoremap(buf, "<Space>", game_mod.place_marker, "Cycle square marker")
+  -- <Space> stays a leader prefix: no nowait, so chords can still match
+  util.nnoremap(
+    buf,
+    "<Space>",
+    game_mod.place_marker,
+    "Cycle square marker",
+    false
+  )
 
   util.nnoremap(buf, "!", function()
     game_mod.place_marker(board_mod.SQUARE_FLAGGED)
@@ -411,8 +467,26 @@ function M.new_ui(game, open_tab)
     game_mod.place_marker(board_mod.SQUARE_MAYBE)
   end, "Mark square")
 
-  -- BufDelete is not emitted when bufhidden=wipe unloads a float buffer, so
-  -- BufWipeout is needed as well to free the engine board
+  util.nnoremap(buf, "q", function()
+    ui:close_pane()
+  end, "Close the game window")
+  util.nnoremap(buf, "Q", function()
+    api.nvim_buf_delete(buf, { force = true })
+  end, "Kill the game")
+
+  local function move(dx, dy)
+    return function()
+      local x, y = ui:cursor_tile()
+      ui:put_cursor_on_tile(x + dx, y + dy)
+    end
+  end
+  util.nnoremap(buf, { "l", "<Right>" }, move(1, 0), "Move right")
+  util.nnoremap(buf, { "h", "<Left>" }, move(-1, 0), "Move left")
+  util.nnoremap(buf, { "j", "<Down>" }, move(0, 1), "Move down")
+  util.nnoremap(buf, { "k", "<Up>" }, move(0, -1), "Move up")
+
+  -- BufDelete is not emitted for every way a buffer can go away, so BufWipeout
+  -- is needed as well to free the engine board
   api.nvim_create_autocmd({ "BufDelete", "BufWipeout", "VimLeavePre" }, {
     buffer = buf,
     once = true,
@@ -428,6 +502,56 @@ function M.new_ui(game, open_tab)
   board_pos[1] = board_pos[1] + 1 -- nvim_win_set_cursor takes a 1-indexed row
   board_pos[2] = board_pos[2] + math.floor(CELL_WIDTH / 2)
   api.nvim_win_set_cursor(0, board_pos)
+
+  -- keep the cursor on a square centre, inside the board
+  for _, event in ipairs { "CursorMoved", "WinEnter" } do
+    api.nvim_create_autocmd(event, {
+      buffer = buf,
+      callback = function()
+        ui:snap_cursor()
+      end,
+    })
+  end
+
+  -- shrink the mapping timeout while the game is on screen, restore on leave
+  for _, event in ipairs { "BufEnter", "WinEnter" } do
+    api.nvim_create_autocmd(event, {
+      buffer = buf,
+      callback = function()
+        scope_timeout(ui, true)
+      end,
+    })
+  end
+  for _, event in ipairs { "BufLeave", "WinLeave" } do
+    api.nvim_create_autocmd(event, {
+      buffer = buf,
+      callback = function()
+        scope_timeout(ui, false)
+      end,
+    })
+  end
+  scope_timeout(ui, true)
+
+  -- hidden games stop ticking; showing them again repaints and resumes
+  api.nvim_create_autocmd("BufHidden", {
+    buffer = buf,
+    callback = function()
+      ui:stop_status_redraw()
+    end,
+  })
+  api.nvim_create_autocmd("BufWinEnter", {
+    buffer = buf,
+    callback = function()
+      ui:full_redraw()
+      ui:snap_cursor()
+      if
+        ui.game.state ~= game_state.GAME_NOT_STARTED
+        and not game_state.is_game_over(ui.game.state)
+      then
+        ui:start_status_redraw()
+      end
+    end,
+  })
 
   M.uis[buf] = ui
   return ui
