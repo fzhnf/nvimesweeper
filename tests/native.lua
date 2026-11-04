@@ -18,6 +18,7 @@ check(board.mine_count == mines, "mine count")
 check(board.unrevealed_count == w * h, "unrevealed count")
 
 -- markers placed before the first reveal must survive it
+-- engine level only: the game blocks marking until the first reveal
 check(board:flag_unrevealed(100, board_mod.SQUARE_FLAGGED), "flag before start")
 check(board.flag_count == 1, "flag count before start")
 

@@ -40,7 +40,12 @@ end
 function M.place_marker(new_state, buf, x, y)
   local game, nx, ny, i = action_args(buf, x, y)
   x, y = nx, ny
-  if game_state.is_game_over(game.state) or not i then
+  -- nothing is marked until the first reveal generates the board
+  if
+    game.state == game_state.GAME_NOT_STARTED
+    or game_state.is_game_over(game.state)
+    or not i
+  then
     return false
   end
 

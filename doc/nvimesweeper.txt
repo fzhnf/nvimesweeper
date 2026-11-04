@@ -94,6 +94,9 @@ MAPS						*nvimesweeper-maps*
 
 In a game of Nvimesweeper, these buffer-local mappings are defined:
 
+Marking a square (<Space>, ! or ?) does nothing until the first square
+has been revealed, which is what generates the board.
+
 					*nvimesweeper_h* *nvimesweeper_j*
 					*nvimesweeper_k* *nvimesweeper_l*
 h j k l or arrows	Move between squares. The cursor is kept on a square

@@ -219,7 +219,8 @@ test_flag_rules :: proc(t: ^testing.T) {
 	testing.expect_value(t, ms_flag(board, 2, 9), i32(0))
 }
 
-// Markers can be placed before the first reveal and must survive it.
+// The UI blocks marking before the first reveal, but the engine must still
+// keep any markers a caller sets before mine placement.
 @(test)
 test_markers_survive_placement :: proc(t: ^testing.T) {
 	board := ms_new(9, 9, 10)
