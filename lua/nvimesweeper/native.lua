@@ -7,9 +7,9 @@ local ABI_VERSION = 1
 
 -- Bump both of these when releasing: the engine is downloaded from the
 -- `v<ENGINE_VERSION>` release and must match ENGINE_SHA256.
-local ENGINE_VERSION = "0.3.5"
+local ENGINE_VERSION = "0.3.6"
 local ENGINE_SHA256 =
-  "ab76b100a142dba16e728b2dc7bbf2c038e13e94d261752f6a37c85fe7e73520"
+  "4b3c6a0e3233917c2d41568b0927b629159156441af02216be972ebb180683f2"
 local RELEASE_URL = "https://github.com/fzhnf/nvimesweeper/releases/download"
 
 local cdef = [[
