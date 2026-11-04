@@ -8,7 +8,8 @@ local ABI_VERSION = 1
 -- Bump both of these when releasing: the engine is downloaded from the
 -- `v<ENGINE_VERSION>` release and must match ENGINE_SHA256.
 local ENGINE_VERSION = "0.1.0"
-local ENGINE_SHA256 = ""
+local ENGINE_SHA256 =
+  "ab76b100a142dba16e728b2dc7bbf2c038e13e94d261752f6a37c85fe7e73520"
 local RELEASE_URL = "https://github.com/fzhnf/nvimesweeper/releases/download"
 
 local cdef = [[
@@ -191,6 +192,20 @@ local function get_lib()
 
   lib = loaded_lib
   return lib
+end
+
+-- Provisions the engine ahead of the first game; never throws, so install hooks
+-- can call it. Returns the library path, or nil when the engine is unavailable.
+function M.prefetch()
+  local ok, path = pcall(locate)
+  if not ok then
+    vim.notify(
+      "nvimesweeper: engine prefetch failed\n" .. tostring(path),
+      vim.log.levels.WARN
+    )
+    return nil
+  end
+  return path
 end
 
 function M.new(width, height, mines)
