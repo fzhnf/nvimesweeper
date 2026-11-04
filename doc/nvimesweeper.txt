@@ -143,6 +143,18 @@ q			Close the game window but keep the game. Run
 Q			Destroy the game: closes its window and frees the
 			game state.
 
+					*nvimesweeper_r*
+r			Retry the same board: clears flags and the clock,
+			and lays out the same mines again.
+
+					*nvimesweeper_R*
+R			Start a new board with the same width, height and
+			mine count, using a fresh seed.
+
+					*nvimesweeper_L*
+L			Switch level: choose one of the configured presets
+			and start it in the same window.
+
 ==============================================================================
 READING THE BOARD				*nvimesweeper-board*
 

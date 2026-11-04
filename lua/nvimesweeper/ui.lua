@@ -31,8 +31,14 @@ end
 -- shown under the board; keep each short enough for the narrowest float
 local HINTS = {
   "<CR> reveal  <Space> flag/mark",
+  "r retry  R new  L level",
   "q close  Q kill  F1 help",
 }
+
+-- fresh seed per restart; milliseconds keep boards distinct within a second
+local function fresh_seed()
+  return math.floor(uv.hrtime() / 1000000)
+end
 
 -- while a game window is focused, mappings resolve faster so that <Space> alone
 -- does not have to wait out the configured chord window
@@ -357,22 +363,27 @@ function Ui:close_pane()
   end
 end
 
+-- float geometry for the current editor, clamped so opening never fails
+local function float_config(width, height)
+  width = math.max(1, math.min(width, vim.o.columns - 2))
+  height = math.max(3, math.min(height, vim.o.lines - 2))
+  return {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),
+    col = math.max(0, math.floor((vim.o.columns - width) / 2)),
+    style = "minimal",
+    border = "single",
+  }
+end
+
 -- opens the game in its window recipe: a sized float, or a new tab page
 local function create_window(ui, window)
   local win
   if window.kind == "float" then
-    -- clamp so a large board or a small editor does not make the open fail
-    local width = math.max(1, math.min(window.width, vim.o.columns - 2))
-    local height = math.max(3, math.min(window.height, vim.o.lines - 2))
-    win = api.nvim_open_win(ui.buf, true, {
-      relative = "editor",
-      width = width,
-      height = height,
-      row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),
-      col = math.max(0, math.floor((vim.o.columns - width) / 2)),
-      style = "minimal",
-      border = "single",
-    })
+    win =
+      api.nvim_open_win(ui.buf, true, float_config(window.width, window.height))
     win = win ~= 0 and win or nil
   else
     local ok, _ = pcall(vim.cmd, "tab sbuffer " .. ui.buf)
@@ -409,6 +420,70 @@ function Ui:reopen()
   return create_window(self, self.window)
 end
 
+-- start a fresh board in the same window; passing the old seed back retries it
+function Ui:restart(width, height, mines, seed)
+  local old = self.game.board
+  width = width or old.width
+  height = height or old.height
+  mines = mines or old.mine_count
+
+  old:free()
+  self.game.board = board_mod.new_board(width, height, mines)
+  self.game.state = game_state.GAME_NOT_STARTED
+  self.game.seed = seed or fresh_seed()
+  self.game.start_time = nil
+  self:stop_status_redraw()
+
+  -- keep the recipe in sync so `q` then `:Nvimesweeper` reopens the new size
+  if self.window.kind == "float" then
+    self.window.width = math.max(42, width * CELL_WIDTH)
+    self.window.height = height + 6
+    local win = api.nvim_get_current_win()
+    if api.nvim_win_get_config(win).relative ~= "" then
+      api.nvim_win_set_config(
+        win,
+        float_config(self.window.width, self.window.height)
+      )
+    end
+  end
+
+  self:full_redraw()
+  self:snap_cursor()
+end
+
+-- pick one of the configured presets and restart in place
+function Ui:pick_level()
+  local config = config_mod.config
+  local choices = vim.deepcopy(config.prompt_presets)
+  if #choices == 0 then
+    return
+  end
+
+  vim.ui.select(choices, {
+    prompt = "Switch level:",
+    format_item = function(name)
+      local preset = config.presets[name]
+      if not preset then
+        return name
+      end
+      return ("%s (%dx%d, %d mines)"):format(
+        name,
+        preset.width,
+        preset.height,
+        preset.mines
+      )
+    end,
+  }, function(choice)
+    if not choice then
+      return -- cancelled
+    end
+    local preset = config.presets[choice]
+    if preset then
+      self:restart(preset.width, preset.height, preset.mines)
+    end
+  end)
+end
+
 local function move_cursor_to_click()
   fn.getchar()
   if api.nvim_get_vvar "mouse_winid" == api.nvim_get_current_win() then
@@ -435,7 +510,7 @@ function M.new_ui(game, open_tab)
     window = open_tab and { kind = "tab" } or {
       kind = "float",
       width = math.max(42, game.board.width * CELL_WIDTH),
-      height = game.board.height + 5,
+      height = game.board.height + 6,
     },
   }, {
     __index = Ui,
@@ -493,6 +568,16 @@ function M.new_ui(game, open_tab)
   util.nnoremap(buf, "Q", function()
     api.nvim_buf_delete(buf, { force = true })
   end, "Kill the game")
+
+  util.nnoremap(buf, "r", function()
+    ui:restart(nil, nil, nil, ui.game.seed)
+  end, "Retry the same board")
+  util.nnoremap(buf, "R", function()
+    ui:restart()
+  end, "New board with the same settings")
+  util.nnoremap(buf, "L", function()
+    ui:pick_level()
+  end, "Switch level")
 
   local function move(dx, dy)
     return function()
