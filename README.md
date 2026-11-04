@@ -60,6 +60,9 @@ See `:help nvimesweeper` for every option, mapping and highlight group.
 Presets: `easy` (9x9, 10 mines), `medium` (16x16, 40), `hard` (30x16, 99),
 `insane` (40x16, 192), `nightmare` (60x16, 384).
 
+Squares are drawn three columns wide so they look square in a terminal, so a
+board needs `width * 3` columns (`hard` needs 90).
+
 In a game: `<CR>`/`x` reveals, `<Space>` cycles flag/mark, `!` flags, `?` marks,
 `<F1>` opens the help, and the mouse buttons do the same as `<CR>`/`<Space>`.
 

@@ -14,6 +14,17 @@ local M = {
 local ns = api.nvim_create_namespace "nvimesweeper"
 local Ui = {}
 
+-- terminal cells are about three times taller than wide, so a square spans
+-- CELL_WIDTH columns to look square
+local CELL_WIDTH = 3
+
+-- one square as CELL_WIDTH columns, with the symbol centred
+local function square_text(char)
+  local pad = math.max(0, CELL_WIDTH - #char)
+  local left = math.floor(pad / 2)
+  return string.rep(" ", left) .. char .. string.rep(" ", pad - left)
+end
+
 function Ui:enable_modification(enable)
   vim.bo[self.buf].modifiable = enable
 end
@@ -159,7 +170,7 @@ function Ui:redraw_board(x1, y1, x2, y2)
   for y = y1, y2 do
     local i = self.game.board:index(x1, y)
     for x = x1, x2 do
-      row[x - x1 + 1] = self:board_square_char(i)
+      row[x - x1 + 1] = square_text(self:board_square_char(i))
       i = i + 1
     end
 
@@ -169,7 +180,7 @@ function Ui:redraw_board(x1, y1, x2, y2)
       top_left_pos[1] + oy,
       top_left_pos[2],
       top_left_pos[1] + oy,
-      top_left_pos[2] + #row,
+      top_left_pos[2] + #row * CELL_WIDTH,
       { table.concat(row) }
     )
   end
@@ -180,11 +191,11 @@ function Ui:redraw_board(x1, y1, x2, y2)
     local i = self.game.board:index(x1, y)
     local mark_y = top_left_pos[1] + y - y1
     for x = x1, x2 do
-      local mark_x = top_left_pos[2] + x - x1
+      local mark_x = top_left_pos[2] + (x - x1) * CELL_WIDTH
       self.board_extmarks[i] =
         api.nvim_buf_set_extmark(self.buf, ns, mark_y, mark_x, {
           id = self.board_extmarks[i],
-          end_col = mark_x + 1,
+          end_col = mark_x + CELL_WIDTH,
           hl_group = self:board_square_hl_group(i),
         })
       i = i + 1
@@ -197,8 +208,9 @@ function Ui:full_redraw()
 
   -- usually, only the changed area of the board is updated, which requires the
   -- lines to already exist, so create filler lines to fit the entire board
-  local left_pad = centering_left_pad(self, self.game.board.width)
-  local line = string.rep(" ", left_pad + self.game.board.width)
+  local board_width = self.game.board.width * CELL_WIDTH
+  local left_pad = centering_left_pad(self, board_width)
+  local line = string.rep(" ", left_pad + board_width)
   local lines = {}
   for i = 1, self.game.board.height do
     lines[i] = line
@@ -250,7 +262,7 @@ function Ui:win_to_board_pos(wx, wy)
     -- nvim_win_get_cursor gives 1-indexed rows
     wx, wy = cursor_pos[2], cursor_pos[1] - 1
   end
-  return wx - board_pos[2], wy - board_pos[1]
+  return math.floor((wx - board_pos[2]) / CELL_WIDTH), wy - board_pos[1]
 end
 
 local function create_window(ui, float_opts)
@@ -344,7 +356,7 @@ function M.new_ui(game, open_tab)
 
   if
     not create_window(ui, not open_tab and {
-      width = math.max(42, game.board.width),
+      width = math.max(42, game.board.width * CELL_WIDTH),
       height = game.board.height + 2,
     } or nil)
   then
@@ -400,6 +412,7 @@ function M.new_ui(game, open_tab)
   ui:full_redraw()
   local board_pos = ui:board_square_pos(1)
   board_pos[1] = board_pos[1] + 1 -- nvim_win_set_cursor takes a 1-indexed row
+  board_pos[2] = board_pos[2] + math.floor(CELL_WIDTH / 2)
   api.nvim_win_set_cursor(0, board_pos)
 
   M.uis[buf] = ui
