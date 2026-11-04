@@ -589,21 +589,44 @@ function M.new_ui(game, open_tab)
     ui:pick_level()
   end, "Switch level")
 
-  -- move in a direction, skipping squares that are already revealed
+  -- move in a direction: the first unrevealed square on the line, otherwise the
+  -- nearest unrevealed square in that half of the board (so single-square
+  -- pockets and islands across a revealed band stay reachable)
   local function move(dx, dy)
     return function()
       local board = ui.game.board
       local x, y = ui:cursor_tile()
+
+      local nx, ny = x + dx, y + dy
       while true do
-        x, y = x + dx, y + dy
-        local i = board:index(x, y)
+        local i = board:index(nx, ny)
         if not i then
-          return -- edge, nothing to land on
+          break
         end
         if board:state(i) ~= board_mod.SQUARE_REVEALED then
-          ui:put_cursor_on_tile(x, y)
+          ui:put_cursor_on_tile(nx, ny)
           return
         end
+        nx, ny = nx + dx, ny + dy
+      end
+
+      local best_i, best_dist
+      for i = 1, board.width * board.height do
+        local tx = (i - 1) % board.width
+        local ty = math.floor((i - 1) / board.width)
+        local ahead = (tx - x) * dx + (ty - y) * dy > 0
+        if ahead and board:state(i) ~= board_mod.SQUARE_REVEALED then
+          local dist = math.abs(tx - x) + math.abs(ty - y)
+          if not best_dist or dist < best_dist then
+            best_i, best_dist = i, dist
+          end
+        end
+      end
+      if best_i then
+        ui:put_cursor_on_tile(
+          (best_i - 1) % board.width,
+          math.floor((best_i - 1) / board.width)
+        )
       end
     end
   end
