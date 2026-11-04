@@ -255,6 +255,11 @@ NvimesweeperTooManyFlags	Used in the status message to indicate that
 						*hl-NvimesweeperUnrevealed*
 NvimesweeperUnrevealed	Used for unrevealed squares without a flag or a mark.
 
+					*hl-NvimesweeperUnrevealedAlt*
+NvimesweeperUnrevealedAlt	Used for the alternating (checkerboard) unrevealed
+				squares, so runs of hidden squares stay
+				countable.
+
 						*hl-NvimesweeperFlag*
 NvimesweeperFlag	Used for unrevealed squares with a flag.
 

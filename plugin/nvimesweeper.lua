@@ -24,6 +24,7 @@ local highlights = {
   NvimesweeperLose = { link = "ErrorMsg" },
   NvimesweeperTooManyFlags = { link = "WarningMsg" },
   NvimesweeperUnrevealed = { ctermbg = "Grey", bg = "#c0c0c0" },
+  NvimesweeperUnrevealedAlt = { ctermbg = 249, bg = "#b0b0b0" },
   NvimesweeperMaybe = {
     ctermfg = "Black",
     ctermbg = "Grey",

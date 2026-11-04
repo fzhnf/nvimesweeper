@@ -152,6 +152,13 @@ function Ui:board_square_hl_group(i)
     local danger = board:danger(i)
     hl_group = danger > 0 and ("NvimesweeperDanger" .. danger)
       or "NvimesweeperRevealed"
+  else
+    -- checkerboard the hidden squares so runs of them stay countable
+    local x = (i - 1) % board.width
+    local y = math.floor((i - 1) / board.width)
+    if (x + y) % 2 == 1 then
+      hl_group = "NvimesweeperUnrevealedAlt"
+    end
   end
 
   return hl_group
