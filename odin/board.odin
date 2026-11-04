@@ -65,6 +65,7 @@ reveal_square :: proc "contextless" (b: ^Board, i: i32) -> bool {
 }
 
 // Collects the cells a mine may occupy, as 1-based indices; returns how many.
+// The start square is never a candidate: the first reveal must not explode.
 fill_candidates :: proc "contextless" (
 	b: ^Board,
 	safe_x, safe_y: i32,
@@ -75,6 +76,9 @@ fill_candidates :: proc "contextless" (
 		if b.mines[i] != 0 {
 			continue
 		}
+		if i32(i) == safe_y*b.width + safe_x {
+			continue
+		}
 		if avoid_safe &&
 		   is_adjacent(safe_x, safe_y, i32(i)%b.width, i32(i)/b.width) {
 			continue
@@ -83,6 +87,20 @@ fill_candidates :: proc "contextless" (
 		n += 1
 	}
 	return n
+}
+
+// Marks one cell as a mine and raises the danger of its neighbours.
+place_mine :: proc "contextless" (b: ^Board, i: i32) {
+	b.mines[i - 1] = 1
+	x, y := cell_x(b, i), cell_y(b, i)
+	for ay in y - 1 ..= y + 1 {
+		for ax in x - 1 ..= x + 1 {
+			if ax < 0 || ay < 0 || ax >= b.width || ay >= b.height {
+				continue
+			}
+			b.danger[ay*b.width + ax] += 1
+		}
+	}
 }
 
 @(export)
@@ -165,29 +183,34 @@ ms_place_mines :: proc "c" (h: i32, safe_i: i32, seed: i64) -> i32 {
 	state := rand.create_u64(u64(seed))
 	gen := rand.default_random_generator(&state)
 
+	// Common case: enough room around the start square, so the mines are a
+	// uniform random subset of those cells and a partial Fisher-Yates over the
+	// candidate list places them in O(cells + mines) instead of rescanning per
+	// mine.
+	n := fill_candidates(b, safe_x, safe_y, true)
+	if int(b.mine_count) <= n {
+		for placed in 0 ..< int(b.mine_count) {
+			j := placed + int(rand.int_max(n - placed, gen))
+			b.candidates[placed], b.candidates[j] = b.candidates[j], b.candidates[placed]
+			place_mine(b, b.candidates[placed])
+		}
+		return 1
+	}
+
+	// Nearly full board: adjacency cannot be avoided, so fall back to scanning
+	// the free cells for each mine.
 	for placed: i32 = 0; placed < b.mine_count; {
 		avoid_safe := b.unrevealed_count - placed > 8
-		n := fill_candidates(b, safe_x, safe_y, avoid_safe)
-		if n == 0 && avoid_safe {
-			n = fill_candidates(b, safe_x, safe_y, false)
+		free := fill_candidates(b, safe_x, safe_y, avoid_safe)
+		if free == 0 && avoid_safe {
+			free = fill_candidates(b, safe_x, safe_y, false)
 		}
-		if n == 0 {
+		if free == 0 {
 			return 0
 		}
 
-		i := b.candidates[int(rand.int_max(n, gen))]
-		b.mines[i - 1] = 1
+		place_mine(b, b.candidates[int(rand.int_max(free, gen))])
 		placed += 1
-
-		x, y := cell_x(b, i), cell_y(b, i)
-		for ay in y - 1 ..= y + 1 {
-			for ax in x - 1 ..= x + 1 {
-				if ax < 0 || ay < 0 || ax >= b.width || ay >= b.height {
-					continue
-				}
-				b.danger[ay*b.width + ax] += 1
-			}
-		}
 	}
 
 	return 1

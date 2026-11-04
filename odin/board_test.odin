@@ -219,6 +219,29 @@ test_flag_rules :: proc(t: ^testing.T) {
 	testing.expect_value(t, ms_flag(board, 2, 9), i32(0))
 }
 
+// Regression: a nearly full board cannot keep mines away from the start, but
+// the clicked square itself must never be one of them.
+@(test)
+test_start_square_never_mined :: proc(t: ^testing.T) {
+	cases := [][3]i32{{3, 3, 7}, {9, 9, 72}, {9, 9, 79}, {5, 5, 20}}
+	for c in cases {
+		board := ms_new(c[0], c[1], c[2])
+		defer ms_free(board)
+
+		safe := i32(1)
+		testing.expect_value(t, ms_place_mines(board, safe, 1234), i32(1))
+		testing.expect_value(t, ms_mine_count(board), c[2])
+		testing.expectf(
+			t,
+			ms_mines(board)[safe - 1] == 0,
+			"start square mined on %dx%d with %d mines",
+			c[0],
+			c[1],
+			c[2],
+		)
+	}
+}
+
 // The UI blocks marking before the first reveal, but the engine must still
 // keep any markers a caller sets before mine placement.
 @(test)
