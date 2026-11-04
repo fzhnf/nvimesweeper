@@ -421,8 +421,9 @@ function Ui:reopen()
 end
 
 -- start a fresh board in the same window; passing the old seed back retries it
-function Ui:restart(width, height, mines, seed)
+function Ui:restart(width, height, mines, seed, keep_start)
   local old = self.game.board
+  local start_i = self.game.start_i
   width = width or old.width
   height = height or old.height
   mines = mines or old.mine_count
@@ -431,6 +432,8 @@ function Ui:restart(width, height, mines, seed)
   self.game.board = board_mod.new_board(width, height, mines)
   self.game.state = game_state.GAME_NOT_STARTED
   self.game.seed = seed or fresh_seed()
+  -- a retry replays the same layout, which is built around the first square
+  self.game.start_i = keep_start and start_i or nil
   self.game.start_time = nil
   self:stop_status_redraw()
 
@@ -448,7 +451,14 @@ function Ui:restart(width, height, mines, seed)
   end
 
   self:full_redraw()
-  self:snap_cursor()
+
+  if self.game.start_i then
+    local x = (self.game.start_i - 1) % width
+    local y = math.floor((self.game.start_i - 1) / width)
+    self:put_cursor_on_tile(x, y)
+  else
+    self:snap_cursor()
+  end
 end
 
 -- pick one of the configured presets and restart in place
@@ -570,7 +580,7 @@ function M.new_ui(game, open_tab)
   end, "Kill the game")
 
   util.nnoremap(buf, "r", function()
-    ui:restart(nil, nil, nil, ui.game.seed)
+    ui:restart(nil, nil, nil, ui.game.seed, true)
   end, "Retry the same board")
   util.nnoremap(buf, "R", function()
     ui:restart()

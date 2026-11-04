@@ -148,7 +148,9 @@ Q			Destroy the game: closes its window and frees the
 
 					*nvimesweeper_r*
 r			Retry the same board: clears flags and the clock,
-			and lays out the same mines again.
+			and lays out the same mines again. The cursor
+			returns to the square you revealed first, since
+			the layout is built around it.
 
 					*nvimesweeper_R*
 R			Start a new board with the same width, height and

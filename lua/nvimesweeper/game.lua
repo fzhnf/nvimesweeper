@@ -84,6 +84,7 @@ function M.reveal(buf, x, y)
   then
     game.board:place_mines(i, game.seed)
     game.state = game_state.GAME_STARTED
+    game.start_i = i -- the square the layout is built around
     game.start_time = uv.hrtime()
     game.ui:start_status_redraw()
   end
