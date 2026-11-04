@@ -1,14 +1,9 @@
 *nvimesweeper.txt*	Play Minesweeper in your favourite text editor!
 
-Author:  Sean Dewar <https://github.com/seandewar>
+Author:  Tima Gutmensch <https://github.com/fzhnf>
 License: MIT
 
 This plugin requires Neovim version 0.12 or newer.
-
-The game engine is a native library written in Odin and shipped in the plugin's
-"lib/" directory. Only "linux-amd64" is prebuilt; on other platforms build it
-from the "odin/" sources, see:
-https://github.com/fzhnf/nvimesweeper#building-the-engine
 
 ==============================================================================
 CONFIGURATION					*nvimesweeper-configure*
@@ -45,12 +40,8 @@ COMMANDS					*nvimesweeper-commands*
 					Using the same seed with the same
 					"width", "height" and "mines" settings
 					will result in the same mine locations
-					between games, as long as the engine
-					library has not changed.
+					between games.
 
-					The engine places mines using
-					`core:math/rand` from the Odin
-					standard library.
 
 			"tab"		Display the game in a new tab page
 					window, rather than a floating window.
@@ -306,7 +297,7 @@ Grab the latest version or report a bug on GitHub:
 
 https://github.com/fzhnf/nvimesweeper
 
-Nvimesweeper is a fork of the original plugin by Sean Dewar:
+Nvimesweeper is an AI-slop fork of the original plugin by Sean Dewar:
 
 https://github.com/seandewar/nvimesweeper
 
