@@ -25,6 +25,9 @@ local function square_text(char)
   return string.rep(" ", left) .. char .. string.rep(" ", pad - left)
 end
 
+-- shown under the board; keep it short enough for the narrowest float
+local HINTS = "<CR> reveal  <Space> flag/mark  F1 help"
+
 function Ui:enable_modification(enable)
   vim.bo[self.buf].modifiable = enable
 end
@@ -223,6 +226,10 @@ function Ui:full_redraw()
     lines[i] = line
   end
 
+  -- keybind hints, centred like the board
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = string.rep(" ", centering_left_pad(self, #HINTS)) .. HINTS
+
   self:enable_modification(true)
   api.nvim_buf_set_lines(self.buf, -1, -1, false, lines)
 
@@ -364,7 +371,7 @@ function M.new_ui(game, open_tab)
   if
     not create_window(ui, not open_tab and {
       width = math.max(42, game.board.width * CELL_WIDTH),
-      height = game.board.height + 2,
+      height = game.board.height + 4,
     } or nil)
   then
     api.nvim_buf_delete(buf, { force = true })
