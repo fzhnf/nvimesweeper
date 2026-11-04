@@ -589,10 +589,22 @@ function M.new_ui(game, open_tab)
     ui:pick_level()
   end, "Switch level")
 
+  -- move in a direction, skipping squares that are already revealed
   local function move(dx, dy)
     return function()
+      local board = ui.game.board
       local x, y = ui:cursor_tile()
-      ui:put_cursor_on_tile(x + dx, y + dy)
+      while true do
+        x, y = x + dx, y + dy
+        local i = board:index(x, y)
+        if not i then
+          return -- edge, nothing to land on
+        end
+        if board:state(i) ~= board_mod.SQUARE_REVEALED then
+          ui:put_cursor_on_tile(x, y)
+          return
+        end
+      end
     end
   end
   util.nnoremap(buf, { "l", "<Right>" }, move(1, 0), "Move right")

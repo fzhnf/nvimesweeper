@@ -99,8 +99,9 @@ has been revealed, which is what generates the board.
 
 					*nvimesweeper_h* *nvimesweeper_j*
 					*nvimesweeper_k* *nvimesweeper_l*
-h j k l or arrows	Move between squares. The cursor is kept on a square
-			centre and cannot leave the board.
+h j k l or arrows	Move between squares, skipping revealed ones. The
+			cursor is kept on a square centre and cannot leave
+			the board.
 
 						*nvimesweeper_<F1>*
 <F1>			Opens this help file.
